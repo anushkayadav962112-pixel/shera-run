@@ -23,11 +23,13 @@ jobs:
           java-version: '21'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
 
       - name: Extract game project
         run: |
-          mkdir app
+          mkdir -p app
           unzip -q SHERA-RUN-Android-Ready.zip -d app
 
       - name: Install dependencies
