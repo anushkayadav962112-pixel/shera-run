@@ -1,3 +1,4 @@
+
 name: Build SHERA RUN Android APK
 
 on:
@@ -20,6 +21,7 @@ jobs:
     timeout-minutes: 60
 
     steps:
+
       # 1. Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -39,8 +41,8 @@ jobs:
           fi
 
           if [ ! -f package.json ]; then
-            echo "ERROR: package.json not found in repository root."
-            find . -maxdepth 4 -name package.json
+            echo "ERROR: package.json not found."
+            find . -maxdepth 5 -name package.json
             exit 1
           fi
 
@@ -59,18 +61,25 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # 5. Install Android SDK packages manually
-      - name: Install Android SDK
+      # 5. Prepare Android SDK paths
+      - name: Prepare Android SDK
         shell: bash
         run: |
           set -e
 
-          echo "Checking Android SDK..."
+          mkdir -p "$ANDROID_HOME"
 
-          if [ ! -d "$ANDROID_HOME" ]; then
-            echo "ERROR: Android SDK directory not found."
-            exit 1
-          fi
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
+
+          echo "Android SDK path prepared."
+
+      # 6. Install Android SDK packages
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          set -e
 
           SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" \
             -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1)
@@ -81,18 +90,11 @@ jobs:
             exit 1
           fi
 
-          echo "Using SDK Manager: $SDKMANAGER"
-
-          SDKMANAGER_DIR=$(dirname "$SDKMANAGER")
-          echo "$SDKMANAGER_DIR" >> "$GITHUB_PATH"
-
-          echo "Accepting Android licenses..."
+          echo "Using: $SDKMANAGER"
 
           yes | "$SDKMANAGER" \
             --sdk_root="$ANDROID_HOME" \
             --licenses || true
-
-          echo "Installing Android SDK packages..."
 
           "$SDKMANAGER" \
             --sdk_root="$ANDROID_HOME" \
@@ -101,23 +103,39 @@ jobs:
             "platforms;android-35" \
             "build-tools;35.0.0"
 
-          echo "Android SDK installation completed."
+          echo "Android SDK packages installed."
 
-      # 6. Verify Android SDK
+      # 7. Verify Android SDK and ADB
       - name: Verify Android SDK
         shell: bash
         run: |
           set -e
 
+          echo "Checking Android SDK..."
+
+          ADB="$ANDROID_HOME/platform-tools/adb"
+
+          if [ ! -f "$ADB" ]; then
+            echo "ERROR: ADB executable not found."
+            find "$ANDROID_HOME" -name adb
+            exit 1
+          fi
+
+          chmod +x "$ADB"
+
+          "$ADB" version
+
           SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" \
             -type f -name sdkmanager | sort -V | tail -n 1)
 
           "$SDKMANAGER" --version
-          adb version
 
-          echo "ANDROID_HOME=$ANDROID_HOME"
+          test -d "$ANDROID_HOME/platforms/android-35"
+          test -d "$ANDROID_HOME/build-tools/35.0.0"
 
-      # 7. Install dependencies
+          echo "Android SDK verification successful!"
+
+      # 8. Install npm dependencies
       - name: Install npm dependencies
         shell: bash
         run: |
@@ -129,28 +147,40 @@ jobs:
             npm install --legacy-peer-deps --no-audit --no-fund
           fi
 
-      # 8. Verify Capacitor
+      # 9. Verify Capacitor
       - name: Verify Capacitor
+        shell: bash
         run: |
+          set -e
           npx cap --version
 
-      # 9. Build web game
+      # 10. Build web game
       - name: Build web game
-        run: npm run build
+        shell: bash
+        run: |
+          set -e
+          npm run build
 
-      # 10. Add Android platform
+          echo "Web game build completed."
+
+      # 11. Add Android platform
       - name: Add Android platform
         shell: bash
         run: |
+          set -e
+
           if [ ! -d android ]; then
             npx cap add android
           fi
 
-      # 11. Sync Android project
+      # 12. Sync Capacitor
       - name: Sync Capacitor
-        run: npx cap sync android
+        shell: bash
+        run: |
+          set -e
+          npx cap sync android
 
-      # 12. Build Android APK
+      # 13. Build SHERA RUN APK
       - name: Build SHERA RUN APK
         working-directory: android
         shell: bash
@@ -163,10 +193,12 @@ jobs:
             --no-daemon \
             --stacktrace
 
-      # 13. Verify APK
+      # 14. Verify APK
       - name: Verify APK
         shell: bash
         run: |
+          set -e
+
           APK="android/app/build/outputs/apk/debug/app-debug.apk"
 
           if [ ! -f "$APK" ]; then
@@ -178,7 +210,7 @@ jobs:
           echo "SHERA RUN APK generated successfully!"
           ls -lh "$APK"
 
-      # 14. Upload APK
+      # 15. Upload APK
       - name: Upload SHERA RUN APK
         uses: actions/upload-artifact@v4
         with:
