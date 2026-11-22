@@ -32,9 +32,9 @@ jobs:
           mkdir -p app
           unzip -q SHERA-RUN-Android-Ready.zip -d app
 
-      - name: Install dependencies
+      - name: Install dependencies and fix esbuild
         working-directory: app
-        run: npm install
+        run: npm install --save-dev esbuild@^0.28.2
 
       - name: Build game
         working-directory: app
