@@ -20,7 +20,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Extract uploaded game project
+      # 2. Extract game project
       - name: Extract uploaded game project
         shell: bash
         run: |
@@ -35,18 +35,20 @@ jobs:
           fi
 
           if [ ! -f package.json ]; then
-            echo "ERROR: package.json not found."
-            echo "Check the uploaded ZIP structure."
-            find . -maxdepth 3 -name package.json
+            echo "ERROR: package.json not found!"
+            find . -maxdepth 5 -name package.json
             exit 1
           fi
 
+          echo "Game project found."
+          ls -la
+
       # 3. Setup Node.js
+      # FIX: npm cache disabled because lock file is missing
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
+          node-version: '22'
 
       # 4. Setup Java
       - name: Setup Java
@@ -55,7 +57,7 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # 5. Setup Android SDK - FIXED
+      # 5. Setup Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
         with:
@@ -69,6 +71,8 @@ jobs:
       # 6. Verify Android SDK
       - name: Verify Android SDK
         run: |
+          set -e
+          echo "Checking Android SDK..."
           sdkmanager --version
           adb version
           echo "ANDROID_HOME=$ANDROID_HOME"
@@ -76,43 +80,58 @@ jobs:
       # 7. Install dependencies
       - name: Install npm dependencies
         run: |
+          set -e
           npm install --legacy-peer-deps --no-audit --no-fund
 
-      # 8. Build web game
-      - name: Build web game
-        run: npm run build
+      # 8. Verify Capacitor
+      - name: Verify Capacitor
+        run: |
+          node -e "console.log(require('./package.json').scripts)"
+          npx cap --version
 
-      # 9. Add Android platform if missing
+      # 9. Build web game
+      - name: Build web game
+        run: |
+          set -e
+          npm run build
+
+      # 10. Add Android platform if missing
       - name: Add Android platform
         run: |
+          set -e
           if [ ! -d android ]; then
             npx cap add android
           fi
 
-      # 10. Sync Capacitor
+      # 11. Sync Capacitor Android
       - name: Sync Capacitor
-        run: npx cap sync android
+        run: |
+          set -e
+          npx cap sync android
 
-      # 11. Build Android APK
+      # 12. Build APK
       - name: Build SHERA RUN APK
         working-directory: android
         run: |
+          set -e
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      # 12. Verify APK
+      # 13. Verify APK
       - name: Verify APK
         run: |
           APK="android/app/build/outputs/apk/debug/app-debug.apk"
 
           if [ ! -f "$APK" ]; then
-            echo "ERROR: APK was not generated."
+            echo "ERROR: APK not generated!"
+            find android -name "*.apk"
             exit 1
           fi
 
+          echo "APK successfully generated:"
           ls -lh "$APK"
 
-      # 13. Upload APK
+      # 14. Upload APK
       - name: Upload SHERA RUN APK
         uses: actions/upload-artifact@v4
         with:
